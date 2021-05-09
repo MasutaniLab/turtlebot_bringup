@@ -5,43 +5,46 @@ project(turtlebot_bringup)
 # Default to C++14
 set(CMAKE_CXX_STANDARD 14)
 
-add_compile_options(-O3 -Wall -Wextra -Wpedantic -Wunused-variable -Wunused-parameter -Wpedantic -Wdeprecated-declarations)
+#add_compile_options(-Wall)
 
 # find dependencies
 find_package(ament_cmake REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(rclcpp REQUIRED)
-find_package(std_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(tf2_ros REQUIRED)
-find_package(builtin_interfaces REQUIRED)
 
-include_directories(include src/bringup)
+if(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
+  set(LIBKOBUKI_DIR $ENV{LIBKOBUKI_ROOT})
+  set(LIBKOBUKI_INC_DIR ${LIBKOBUKI_DIR}/include)
+  set(LIBKOBUKI_LIB_DIR ${LIBKOBUKI_DIR}/lib)
+else()
+  set(LIBKOBUKI_INC_DIR /usr/local/include/kobuki)
+  set(LIBKOBUKI_LIB_DIR /usr/local/lib)
+endif()
+
+set(LIBKOBUKI_LIBRARIES kobuki)
 
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ./lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ./bin)
 
-add_library(DockingController SHARED kobuki/DockingController.cpp)
-add_library(Kobuki_impl       SHARED kobuki/Kobuki_impl.cpp kobuki/Thread.cpp kobuki/KobukiBase.cpp kobuki/DockingController.cpp kobuki/SerialPort.cpp kobuki/Translator.cpp kobuki/Transport.cpp)
-add_library(Thread            SHARED kobuki/Thread.cpp)
-add_library(Transport         SHARED kobuki/Transport.cpp kobuki/SerialPort.cpp)
-add_library(kobuki            SHARED kobuki/libkobuki.cpp kobuki/Kobuki_impl.cpp kobuki/Thread.cpp kobuki/KobukiBase.cpp kobuki/DockingController.cpp kobuki/SerialPort.cpp kobuki/Translator.cpp kobuki/Transport.cpp)
-add_library(KobukiBase        SHARED kobuki/KobukiBase.cpp kobuki/SerialPort.cpp kobuki/Thread.cpp kobuki/Transport.cpp kobuki/Translator.cpp)
-add_library(SerialPort        SHARED kobuki/SerialPort.cpp)
-add_library(Translator        SHARED kobuki/Translator.cpp)
-add_library(kobukicwrapper    SHARED kobuki/kobukicwrapper.cpp kobuki/Kobuki_impl.cpp kobuki/Thread.cpp kobuki/libkobuki.cpp kobuki/DockingController.cpp kobuki/KobukiBase.cpp kobuki/SerialPort.cpp kobuki/Transport.cpp kobuki/Translator.cpp)
+include_directories(include src/bringup)
+include_directories(${LIBKOBUKI_INC_DIR})
+add_definitions(-D_USE_MATH_DEFINES)
+link_directories(${LIBKOBUKI_LIB_DIR})
 
-add_library(Turtlebot		  SHARED src/bringup/Turtlebot.cpp)
-ament_target_dependencies(Turtlebot rclcpp tf2_ros)
 
-add_executable(turtlebot2 src/bringup/turtlebot2.cpp src/bringup/Turtlebot.cpp kobuki/DockingController.cpp kobuki/Kobuki_impl.cpp kobuki/Thread.cpp kobuki/Transport.cpp kobuki/libkobuki.cpp kobuki/KobukiBase.cpp kobuki/SerialPort.cpp kobuki/Translator.cpp)
+add_library(Turtlebot SHARED src/bringup/Turtlebot.cpp src/bringup/Turtlebot.hpp)
+ament_target_dependencies(Turtlebot rclcpp sensor_msgs geometry_msgs nav_msgs tf2_ros)
+target_link_libraries(Turtlebot ${LIBKOBUKI_LIBRARIES})
+
+add_executable(turtlebot2 src/bringup/turtlebot2.cpp src/bringup/Turtlebot.cpp src/bringup/Turtlebot.hpp)
+ament_target_dependencies(turtlebot2 rclcpp sensor_msgs geometry_msgs nav_msgs tf2_ros)
+target_link_libraries(turtlebot2 ${LIBKOBUKI_LIBRARIES})
 
 add_executable(teleop_node src/teleop/teleop_node.cpp)
-
-ament_target_dependencies(turtlebot2 rclcpp tf2_ros std_msgs geometry_msgs nav_msgs sensor_msgs)
-
-ament_target_dependencies(teleop_node rclcpp sensor_msgs geometry_msgs)
+ament_target_dependencies(teleop_node rclcpp sensor_msgs geometry_msgs nav_msgs tf2_ros)
 
 target_include_directories(turtlebot2 PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>

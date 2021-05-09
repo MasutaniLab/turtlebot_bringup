@@ -1,4 +1,4 @@
-#include <libkobuki.h>
+﻿#include <libkobuki.h>
 
 #include <rclcpp/rclcpp.hpp>
 
@@ -65,19 +65,21 @@ class Turtlebot :
             double N_position_x = 0;
             double N_position_y = 0;
             double N_orientation_theta = 0;
+            rclcpp::Time N_time;
     
             // now velocity
             double N_linear_x_velocity = 0;
             double N_linear_y_velocity = 0;
-            double N_linear_z_velocity = 0;
+            double N_angular_velocity = 0;
       
             // old position
             double O_position_x = 0;
             double O_position_y = 0;
             double O_orientation_theta = 0;
+            rclcpp::Time O_time;
 
             double heading;
-            double heading_offset = 0.0/0.0;
+            double heading_offset = std::numeric_limits<double>::quiet_NaN();
             double head_angle;
     
             // seconds
@@ -97,13 +99,10 @@ class Turtlebot :
             std_msgs::msg::Bool bool_msg = std_msgs::msg::Bool();
        
             // calculate velocity
-            double calculateVelocity(double now_velocity, double old_velocity, float time);
+            double calculateVelocity(double now_velocity, double old_velocity, double time);
     
             // get velocity
             void getVelocity(geometry_msgs::msg::Twist::SharedPtr msg);
-    
-            // controle that based on velocity
-            void controleByVelocity();
     
             // publish odometry
             void publishOdometry();

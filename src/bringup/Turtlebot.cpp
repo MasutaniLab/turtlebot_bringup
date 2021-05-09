@@ -1,4 +1,4 @@
-#include <iostream>
+﻿#include <iostream>
 #include <cmath>
 
 #include <Turtlebot.hpp>
@@ -9,6 +9,7 @@ using namespace std;
 
 
 Turtlebot::Turtlebot() : Node("turtlebot"){
+    RCLCPP_INFO(this->get_logger(), "Turtlebot constructor");
    /*
     * These lines are declaration parameter lines.
     */
@@ -27,7 +28,15 @@ Turtlebot::Turtlebot() : Node("turtlebot"){
     * device_special is device name there may be it in /dev.
     * If you have it, you must set up device special use
     */
-    kobuki = createKobuki(KobukiStringArgument(device_special));
+    try {
+        kobuki = createKobuki(KobukiStringArgument(device_special));
+    } catch (std::exception& e) {
+        RCLCPP_ERROR(this->get_logger(), e.what());
+        throw;
+    }
+    RCLCPP_INFO(this->get_logger(), "kobuki created");
+
+    kobuki->setGain(100.0, 10.0, 2.0);  //TODO: パラメータ化する
 
    /*
     * run pose reset.
@@ -127,6 +136,7 @@ Turtlebot::Turtlebot() : Node("turtlebot"){
         20ms,
         bind(&Turtlebot::getButtonPush, this)
     );
+    RCLCPP_INFO(this->get_logger(), "Turtlebot constructor finished");
 }
 
 
@@ -161,7 +171,7 @@ geometry_msgs::msg::Quaternion Turtlebot::translateCoordinate(double x, double y
 
 // get velocity of geometry
 void Turtlebot::getVelocity(geometry_msgs::msg::Twist::SharedPtr msg) {
-    checkWheelDrop();
+    //checkWheelDrop(); 持ち上げても終了しないようにする．
 
     if (msg->angular.z >= M_PI/2)
     {
@@ -211,36 +221,39 @@ void Turtlebot::publishOdometry() {
 
     odom_msg.child_frame_id = "base_link";
     odom_msg.header.frame_id = "map";
-    odom_msg.header.stamp = get_clock()->now();
+    rclcpp::Time N_time = get_clock()->now();
+    odom_msg.header.stamp = N_time;
     odom_msg.pose.pose.position.x = N_position_x;
     odom_msg.pose.pose.position.y = N_position_y;
     odom_msg.pose.pose.orientation = translateCoordinate(0.0, 0.0, N_orientation_theta);
 
-    N_linear_x_velocity = calculateVelocity(N_position_x, O_position_x, 0.02);
-    N_linear_y_velocity = calculateVelocity(N_position_y, O_position_y, 0.02);
-    N_linear_z_velocity = calculateVelocity(N_orientation_theta, O_orientation_theta, 0.02);
+    double dt = (N_time - O_time).seconds();
+    N_linear_x_velocity = calculateVelocity(N_position_x, O_position_x, dt);
+    N_linear_y_velocity = calculateVelocity(N_position_y, O_position_y, dt);
+    N_angular_velocity = calculateVelocity(N_orientation_theta, O_orientation_theta, dt);
 
     odom_msg.twist.twist.linear.x = N_linear_x_velocity;
     odom_msg.twist.twist.linear.y = N_linear_y_velocity;
-    odom_msg.twist.twist.angular.z = kobuki->getRotate();
+    odom_msg.twist.twist.angular.z = N_angular_velocity;
 
     O_position_x = N_position_x;
     O_position_y = N_position_y;
     O_orientation_theta = N_orientation_theta;
+    O_time = N_time;
 
     odom->publish(odom_msg);
 }
 
 
 // 速度計算
-double Turtlebot::calculateVelocity(double N_position, double O_position, float time){
+double Turtlebot::calculateVelocity(double N_position, double O_position, double time){
     return (O_position - N_position)/time;
 }
 
 
 // 回転慣性値のブロードキャスト
 void Turtlebot::publishInertial() {
-
+#if 0
     if (isnan(heading_offset) == true){
         heading_offset = (static_cast<double>(kobuki->getInertialAngle()) / 100.0) * M_PI / 180.0;
     }
@@ -270,6 +283,7 @@ void Turtlebot::publishInertial() {
     imu_msg.angular_velocity.z = kobuki->getInertialAngleRate();
 
     inertial->publish(imu_msg);
+#endif
 }
 
 void Turtlebot::getEmergency() {
