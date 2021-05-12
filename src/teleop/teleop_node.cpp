@@ -11,15 +11,16 @@ class TeleopNode : public rclcpp::Node {
         TeleopNode()
             : Node("teleop")
         {
-            vel_topic = this->create_publisher<geometry_msgs::msg::Twist>("/turtlebot/command/velocity", 10);
-            joy_topic = this->create_subscription<sensor_msgs::msg::Joy>("/joy", 10, std::bind(&TeleopNode::callback, this, _1));
+            RCLCPP_INFO(this->get_logger(), "Node constructor");
+            vel_topic = this->create_publisher<geometry_msgs::msg::Twist>("commands/velocity", 10);
+            joy_topic = this->create_subscription<sensor_msgs::msg::Joy>("joy", 10, std::bind(&TeleopNode::callback, this, _1));
         }
 
     private:
         void callback(const sensor_msgs::msg::Joy::SharedPtr msg) {
             auto twist = geometry_msgs::msg::Twist();
-            twist.linear.x = msg->axes[1]/2;
-            twist.angular.z = msg->axes[0];
+            twist.linear.x = msg->axes[1] * 0.3; // 最高並進速度 0.3 [m/s]
+            twist.angular.z = msg->axes[0] * 1.0; // 最高回転速度 1.0 [rad/s]
 
 			vel_topic->publish(twist);
         }

@@ -9,19 +9,19 @@ using namespace std;
 
 
 Turtlebot::Turtlebot() : Node("turtlebot"){
-    RCLCPP_INFO(this->get_logger(), "Turtlebot constructor");
+    RCLCPP_INFO(this->get_logger(), "Node constructor");
    /*
     * These lines are declaration parameter lines.
     */
     declare_parameter("OdomTransFrameId",       "odom");
     declare_parameter("OdomTransChildFrameId",  "base_link");
     declare_parameter("DeviceSpecial",          "/dev/kobuki");
-    declare_parameter("TurtlebotVelocityTopic", "cmd_vel");
 
    /*
     * kobuki device special
     */
     const string device_special = this->get_parameter("DeviceSpecial").as_string();
+    RCLCPP_INFO(this->get_logger(), "DeviceSpecial: %s", device_special.c_str());
 
    /*
     * set up kobuki for communicating.
@@ -42,20 +42,19 @@ Turtlebot::Turtlebot() : Node("turtlebot"){
     * run pose reset.
     */
     kobuki->setPose(0.0, 0.0, 0.0);
+    O_time = get_clock()->now();
 
     odom_trans.header.frame_id = this->get_parameter("OdomTransFrameId").as_string();
     odom_trans.child_frame_id = this->get_parameter("OdomTransChildFrameId").as_string();
 
     odom_broadcaster = std::make_shared<tf2_ros::TransformBroadcaster>(this);
 
-    const string cmd_vel_topic_name = this->get_parameter("TurtlebotVelocityTopic").as_string();
-
    /*
     * subscription for command velocity to send kobuki velocity.
     * reveive only Twist structure in geometry_msgs.
     */
     velocity = this->create_subscription<geometry_msgs::msg::Twist>(
-        cmd_vel_topic_name,
+        "commands/velocity",
         10,
         [this](geometry_msgs::msg::Twist::SharedPtr msg)
         {
@@ -68,7 +67,7 @@ Turtlebot::Turtlebot() : Node("turtlebot"){
     * receive onlu Bool structure in std_msgs.
     */
     reset = this->create_subscription<std_msgs::msg::Bool>(
-        "turtlebot2/commands/reset_pose",
+        "commands/reset_odometry",
 	    10,
 	    [this](std_msgs::msg::Bool::SharedPtr msg)
         {
@@ -80,7 +79,7 @@ Turtlebot::Turtlebot() : Node("turtlebot"){
     * publisher for send Odometry message.
     */
     odom = this->create_publisher<nav_msgs::msg::Odometry>(
-        "turtlebot2/odometry",
+        "odom",
 	    10
     );
 
@@ -88,17 +87,17 @@ Turtlebot::Turtlebot() : Node("turtlebot"){
     * publisher for sending pushed button.
     */
     button_0 = this->create_publisher<std_msgs::msg::Bool>(
-        "turtlebot2/button0",
+        "events/button0",
         10
     );
 
     button_1 = this->create_publisher<std_msgs::msg::Bool>(
-        "turtlebot2/button1",
+        "events/button1",
         10
     );
 
     button_2 = this->create_publisher<std_msgs::msg::Bool>(
-        "turtlebot2/button2",
+        "events/button2",
         10
     );
 
@@ -115,7 +114,7 @@ Turtlebot::Turtlebot() : Node("turtlebot"){
     * imu can't use!!!
     */
     inertial = this->create_publisher<sensor_msgs::msg::Imu>(
-        "turtlebot2/imu",
+        "sensors/imu",
         10
     );
 
@@ -136,6 +135,7 @@ Turtlebot::Turtlebot() : Node("turtlebot"){
         20ms,
         bind(&Turtlebot::getButtonPush, this)
     );
+
     RCLCPP_INFO(this->get_logger(), "Turtlebot constructor finished");
 }
 
@@ -145,7 +145,7 @@ Turtlebot::Turtlebot() : Node("turtlebot"){
 void Turtlebot::checkWheelDrop(){
     if (kobuki->isRightWheelDrop() || kobuki->isLeftWheelDrop()) {
         delete kobuki;
-        RCLCPP_INFO(this->get_logger(), "WHEEL DROP");
+        RCLCPP_ERROR(this->get_logger(), "WHEEL DROP");
         abort();
     }
 }
@@ -171,7 +171,9 @@ geometry_msgs::msg::Quaternion Turtlebot::translateCoordinate(double x, double y
 
 // get velocity of geometry
 void Turtlebot::getVelocity(geometry_msgs::msg::Twist::SharedPtr msg) {
-    //checkWheelDrop(); 持ち上げても終了しないようにする．
+#ifdef ENABLE_CHECK_WHEEL_DROP
+    checkWheelDrop();
+#endif
 
     if (msg->angular.z >= M_PI/2)
     {
@@ -207,7 +209,9 @@ void Turtlebot::getVelocity(geometry_msgs::msg::Twist::SharedPtr msg) {
 
 // オドメトリのブロードキャスト
 void Turtlebot::publishOdometry() {
+#ifdef ENABLE_CHECK_WHEEL_DROP
     checkWheelDrop();
+#endif
 
     kobuki->getPose(&N_position_x, &N_position_y, &N_orientation_theta);
 
@@ -221,7 +225,7 @@ void Turtlebot::publishOdometry() {
 
     odom_msg.child_frame_id = "base_link";
     odom_msg.header.frame_id = "map";
-    rclcpp::Time N_time = get_clock()->now();
+    N_time = get_clock()->now();
     odom_msg.header.stamp = N_time;
     odom_msg.pose.pose.position.x = N_position_x;
     odom_msg.pose.pose.position.y = N_position_y;
